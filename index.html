@@ -23,15 +23,21 @@
     .title{font-weight:600}
     .wrap{
       max-width:1100px; margin:auto; padding:10px; display:grid; gap:10px;
+      height: calc(100vh - 60px);
     }
     .frame-wrap{
       background:var(--card); border:1px solid #e5e7eb; border-radius:16px;
       box-shadow:0 10px 30px rgba(2,8,20,.08); overflow:hidden; position:relative;
+      height: 100%;
     }
     iframe{
       display:block; width:100%; border:0;
-      /* Fallback: ocupa el alto de la ventana si no hay auto-resize */
-      min-height:100dvh;
+      /* Scroll suave para móviles */
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      overscroll-behavior: contain;
+      height: 100%;
+      min-height: 100%;
     }
     .loader{
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -49,12 +55,42 @@
       display:inline-block; padding:8px 12px; border:1px solid #c7d2fe; border-radius:10px; text-decoration:none;
       color:#1d4ed8; background:#eef2ff;
     }
+
+    /* Optimizaciones para móviles */
+    @media (max-width: 768px) {
+      .wrap {
+        padding: 0;
+        max-width: 100%;
+        height: calc(100vh - 50px);
+      }
+      
+      .frame-wrap {
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        height: 100%;
+      }
+      
+      header {
+        padding: 8px 12px;
+      }
+      
+      iframe {
+        border-radius: 0;
+      }
+    }
+
+    /* Para pantallas muy pequeñas */
+    @media (max-width: 480px) {
+      .wrap {
+        height: calc(100vh - 45px);
+      }
+    }
   </style>
 </head>
 <body>
   <header>
-    
-    </div>
+    <div class="title">preopercionales combuses</div>
   </header>
 
   <main class="wrap">
@@ -65,9 +101,10 @@
       <iframe
         id="appscript"
         title="Mi WebApp"
-        src="https://script.google.com/macros/s/AKfycbwb2Ro2lnaUby2Cr-rceMzaVfdOEWx3NTN0h_nUPYT4IMPu4ImhLKldCFQby2wqWFhWUQ/exec?embedded=1"
+        src="https://script.google.com/macros/s/AKfycbyMJujQe5cJcHtIxv8JVOxumAcJDcUaGxhVj6gYIxslpDMFB20LF9w6gxj0fDA5E7Ax/exec?embedded=1"
         allow="clipboard-read; clipboard-write; camera; microphone; geolocation; fullscreen"
         referrerpolicy="strict-origin-when-cross-origin"
+        scrolling="yes"
       ></iframe>
     </div>
   </main>
@@ -75,9 +112,13 @@
   <script>
     // Marcar listo al cargar para ocultar el loader
     const iframe = document.getElementById('appscript');
-    iframe.addEventListener('load', () => document.body.classList.add('ready'));
+    iframe.addEventListener('load', () => {
+      document.body.classList.add('ready');
+      // Inicializar scroll en móviles después de cargar
+      initMobileScroll();
+    });
 
-    // Auto-ajuste de altura (funciona si la WebApp envía postMessage; ver snippet más abajo)
+    // Auto-ajuste de altura (funciona si la WebApp envía postMessage)
     const ALLOWED_ORIGINS = new Set([
       'https://script.google.com',
       'https://script.googleusercontent.com'
@@ -91,16 +132,105 @@
       if (ev.data && ev.data.type === 'appsScriptHeight') {
         const h = Math.max(320, Math.min(Number(ev.data.height || 0), 8000));
         iframe.style.height = h + 'px';
+        // Para móviles, limitar la altura máxima
+        if (isMobile()) {
+          const maxHeight = window.innerHeight * 2; // Máximo 2 pantallas
+          iframe.style.height = Math.min(h, maxHeight) + 'px';
+          iframe.style.overflowY = 'auto';
+        }
       }
     });
 
-    // Fallback: asegura mínimo alto de viewport si no hay auto-resize
-    function setViewportHeight(){
-      iframe.style.minHeight = Math.max(window.innerHeight || 600, 600) + 'px';
+    // Detectar si es dispositivo móvil
+    function isMobile() {
+      return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     }
+
+    // Inicializar scroll para móviles
+    function initMobileScroll() {
+      if (!isMobile()) return;
+      
+      // Configurar iframe para scroll táctil
+      iframe.style.webkitOverflowScrolling = 'touch';
+      iframe.style.overflowY = 'scroll';
+      
+      // Prevenir comportamientos problemáticos del scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100%';
+      
+      // Ajustar altura inicial
+      adjustIframeHeight();
+      
+      // Prevenir zoom con doble toque (solo en iframe)
+      let lastTouchEnd = 0;
+      iframe.addEventListener('touchend', (event) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          event.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, { passive: false });
+    }
+
+    // Ajustar altura del iframe
+    function adjustIframeHeight() {
+      if (isMobile()) {
+        const headerHeight = document.querySelector('header').offsetHeight;
+        const viewportHeight = window.innerHeight;
+        const iframeHeight = viewportHeight - headerHeight;
+        
+        iframe.style.height = iframeHeight + 'px';
+        iframe.style.minHeight = iframeHeight + 'px';
+        
+        // También ajustar el contenedor
+        document.querySelector('.wrap').style.height = iframeHeight + 'px';
+        document.querySelector('.frame-wrap').style.height = iframeHeight + 'px';
+      }
+    }
+
+    // Ajustar en cambios de tamaño/orientación
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        adjustIframeHeight();
+      }, 150);
+    });
+
+    window.addEventListener('orientationchange', () => {
+      setTimeout(adjustIframeHeight, 300);
+    });
+
+    // Inicializar al cargar la página
+    document.addEventListener('DOMContentLoaded', () => {
+      adjustIframeHeight();
+      // Fallback: si después de 3 segundos no hay auto-resize, usar altura por defecto
+      setTimeout(() => {
+        if (iframe.style.height === '100%') {
+          adjustIframeHeight();
+        }
+      }, 3000);
+    });
+
+    // Fallback para navegadores que no soportan dvh
+    function setViewportHeight(){
+      if (!isMobile()) return;
+      
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      
+      const headerHeight = document.querySelector('header').offsetHeight;
+      const calculatedHeight = window.innerHeight - headerHeight;
+      
+      iframe.style.minHeight = Math.max(calculatedHeight, 400) + 'px';
+      document.querySelector('.wrap').style.height = calculatedHeight + 'px';
+    }
+    
+    // Ejecutar al inicio y en resize
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
   </script>
 </body>
 </html>
+
 
